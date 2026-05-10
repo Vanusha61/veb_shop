@@ -37,3 +37,12 @@ services:
 
 volumes:
   pgdata:
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - product-service
+      - order-service
+    restart: always
