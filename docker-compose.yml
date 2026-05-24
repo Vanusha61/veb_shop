@@ -76,3 +76,45 @@ services:
 
 volumes:
   pgdata:
+  auth-service:
+    build: ./auth_service
+    ports:
+      - "8002:8002"
+    restart: always
+    networks:
+      - shop-net
+
+  admin-frontend:
+    build: ./admin_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - product-service
+      - order-service
+      - auth-service
+    restart: always
+    networks:
+      - shop-net
+
+  auth-service:
+    build: ./auth_service
+    ports:
+      - "8002:8002"
+    restart: always
+    networks:
+      - shop-net
+
+  admin-frontend:
+    build: ./admin_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - product-service
+      - order-service
+      - auth-service
+    restart: always
+    networks:
+      - shop-net
+networks:
+  shop-net:
+    driver: bridge

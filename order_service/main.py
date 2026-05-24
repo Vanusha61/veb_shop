@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from auth import get_current_admin
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -156,6 +157,11 @@ def create_order(data: OrderCreate, db: Session = Depends(get_db)):
     return {"order_id": order.id, "total": order.total_price, "items_count": len(items_data)}
 
 
+@app.get("/admin/orders")
+def get_all_orders(admin = Depends(get_current_admin), db: Session = Depends(get_db)):
+    orders = db.query(models.Order).all()
+    return [{"order_id": o.id, "status": o.status, "total": o.total_price, "created_at": str(o.created_at)} for o in orders]
+
 @app.get("/orders")
 def get_orders(session_id: str, db: Session = Depends(get_db)):
     orders = db.query(models.Order).filter(models.Order.session_id == session_id).all()
@@ -163,7 +169,7 @@ def get_orders(session_id: str, db: Session = Depends(get_db)):
 
 
 @app.put("/orders/{order_id}/status")
-def update_order_status(order_id: int, data: OrderStatus, db: Session = Depends(get_db)):
+def update_order_status(order_id: int, data: OrderStatus, admin = Depends(get_current_admin), db: Session = Depends(get_db)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Not found")

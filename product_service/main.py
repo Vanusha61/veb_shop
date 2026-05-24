@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from auth import get_current_admin
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
@@ -35,7 +36,7 @@ def get_db():
 
 
 @app.post("/products")
-def create_product(data: ProductCreate, db: Session = Depends(get_db)):
+def create_product(data: ProductCreate, admin = Depends(get_current_admin), db: Session = Depends(get_db)):
     product = models.Product(**data.model_dump())
     db.add(product)
     db.commit()
@@ -57,7 +58,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/products/{product_id}")
-def update_product(product_id: int, data: ProductUpdate, db: Session = Depends(get_db)):
+def update_product(product_id: int, data: ProductUpdate, admin = Depends(get_current_admin), db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Not found")
@@ -69,7 +70,7 @@ def update_product(product_id: int, data: ProductUpdate, db: Session = Depends(g
 
 
 @app.delete("/products/{product_id}")
-def delete_product(product_id: int, db: Session = Depends(get_db)):
+def delete_product(product_id: int, admin = Depends(get_current_admin), db: Session = Depends(get_db)):
     product = db.query(models.Product).filter(models.Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Not found")
