@@ -1,120 +1,77 @@
-version: '3.9'
-
+version: '3.8'
 services:
   postgres:
     image: postgres:15
-    container_name: postgres_db
-    restart: always
-
     environment:
-      POSTGRES_DB: shop_db
-      POSTGRES_USER: postgres
+      POSTGRES_USER: shop_user
       POSTGRES_PASSWORD: Vanya2020)
-
+      POSTGRES_DB: shop_db
     ports:
       - "5432:5432"
-
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    networks:
+      - shop-net
 
   product-service:
     build: ./product_service
-    container_name: product_service
-
     ports:
       - "8001:8001"
-
     depends_on:
-      postgres:
-        condition: service_healthy
-
-    restart: always
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://shop_user:Vanya2020)@postgres/shop_db
+    networks:
+      - shop-net
 
   order-service:
     build: ./order_service
-    container_name: order_service
-
     ports:
       - "8002:8002"
-
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
+      - product-service
+    environment:
+      DATABASE_URL: postgresql://shop_user:Vanya2020)@postgres/shop_db
+      PRODUCT_SERVICE_URL: http://product-service:8001
+    networks:
+      - shop-net
 
-    restart: always
+  auth-service:
+    build: ./auth_service
+    ports:
+      - "8003:8003"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql://shop_user:Vanya2020)@postgres/shop_db
+      SECRET_KEY: your-super-secret-key-change-me
+    networks:
+      - shop-net
 
   gateway:
     build: ./gateway
-    container_name: gateway
-
     ports:
-      - "8080:8080"
-
+      - "80:80"
     depends_on:
       - product-service
       - order-service
-
-    restart: always
+      - auth-service
+    networks:
+      - shop-net
 
   frontend:
     build: ./frontend
-    container_name: frontend
-
     ports:
-      - "80:80"
-
-    depends_on:
-      - gateway
-
-    restart: always
-
-volumes:
-  pgdata:
-  auth-service:
-    build: ./auth_service
-    ports:
-      - "8002:8002"
-    restart: always
+      - "3000:3000"
     networks:
       - shop-net
 
   admin-frontend:
     build: ./admin_frontend
     ports:
-      - "3000:3000"
-    depends_on:
-      - product-service
-      - order-service
-      - auth-service
-    restart: always
+      - "3001:3000"
     networks:
       - shop-net
 
-  auth-service:
-    build: ./auth_service
-    ports:
-      - "8002:8002"
-    restart: always
-    networks:
-      - shop-net
-
-  admin-frontend:
-    build: ./admin_frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - product-service
-      - order-service
-      - auth-service
-    restart: always
-    networks:
-      - shop-net
 networks:
   shop-net:
     driver: bridge

@@ -1,0 +1,6 @@
+# В файле order_service/main.py в функции create_order после строки:
+#   order = await database.fetch_one(insert_query, values)
+# добавь:
+    # Уменьшаем остатки товаров
+    for item in order_data["items"]:
+        await product_client.update_stock(item["product_id"], -item["quantity"])

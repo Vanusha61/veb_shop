@@ -1,32 +1,41 @@
-import os
 import httpx
-from dotenv import load_dotenv
 
-load_dotenv()
+class ProductClient:
+    def __init__(self, base_url: str):
+        self.base_url = base_url
 
-PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://127.0.0.1:8000")
+    # === СИНХРОННЫЕ методы (для обычных def функций) ===
+    def update_stock_sync(self, product_id: int, delta: int):
+        """Синхронное изменение остатка товара"""
+        with httpx.Client() as client:
+            resp = client.patch(
+                f"{self.base_url}/products/{product_id}/stock",
+                json={"delta": delta},
+                timeout=5.0
+            )
+            resp.raise_for_status()
+            return resp.json()
 
-def check_product(product_id: int):
-    with httpx.Client() as client:
-        r = client.get(f"{PRODUCT_SERVICE_URL}/internal/products/{product_id}/check")
-        r.raise_for_status()
-        return r.json()
+    def check_product_sync(self, product_id: int):
+        """Синхронная проверка товара (возвращает данные)"""
+        with httpx.Client() as client:
+            resp = client.get(f"{self.base_url}/products/{product_id}")
+            resp.raise_for_status()
+            return resp.json()
 
-def get_product(product_id: int):
-    with httpx.Client() as client:
-        r = client.get(f"{PRODUCT_SERVICE_URL}/products/{product_id}")
-        r.raise_for_status()
-        return r.json()
+    # === АСИНХРОННЫЕ методы (если понадобятся в async функциях) ===
+    async def update_stock(self, product_id: int, delta: int):
+        async with httpx.AsyncClient() as client:
+            resp = await client.patch(
+                f"{self.base_url}/products/{product_id}/stock",
+                json={"delta": delta},
+                timeout=5.0
+            )
+            resp.raise_for_status()
+            return resp.json()
 
-def update_stock(product_id: int, quantity: int):
-    with httpx.Client() as client:
-        product = get_product(product_id)
-        new_stock = product["stock"] - quantity
-        if new_stock < 0:
-            new_stock = 0
-        r = client.put(
-            f"{PRODUCT_SERVICE_URL}/products/{product_id}",
-            params={"stock_quantity": new_stock}
-        )
-        r.raise_for_status()
-        return r.json()
+    async def get_product(self, product_id: int):
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{self.base_url}/products/{product_id}")
+            resp.raise_for_status()
+            return resp.json()

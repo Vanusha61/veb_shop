@@ -1,66 +1,81 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { apiGet, apiPost, apiPut, apiDelete } from '../api/client';
 
 export default function ProductsPage() {
-  const { token, logout } = useAuth();
   const [products, setProducts] = useState([]);
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [stock, setStock] = useState('');
-  const [editId, setEditId] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name: '', price: '', stock: '' });
 
-  const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
-
-  const fetchProducts = async () => {
-    const res = await fetch('http://localhost:8000/products');
-    setProducts(await res.json());
+  const loadProducts = async () => {
+    const data = await apiGet('/products');
+    setProducts(data);
   };
-  useEffect(() => { fetchProducts(); }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const body = JSON.stringify({ name, price: +price, stock_quantity: +stock });
-    const url = editId ? `http://localhost:8000/products/${editId}` : 'http://localhost:8000/products';
-    await fetch(url, { method: editId ? 'PUT' : 'POST', headers, body });
-    setName(''); setPrice(''); setStock(''); setEditId(null);
-    fetchProducts();
+    if (editing) {
+      await apiPut(`/products/${editing.id}`, form);
+    } else {
+      await apiPost('/products', form);
+    }
+    setEditing(null);
+    setForm({ name: '', price: '', stock: '' });
+    loadProducts();
   };
 
-  const handleEdit = (p) => { setName(p.name); setPrice(p.price.toString()); setStock(p.stock_quantity.toString()); setEditId(p.id); };
   const handleDelete = async (id) => {
-    if (window.confirm('Удалить?')) {
-      await fetch(`http://localhost:8000/products/${id}`, { method: 'DELETE', headers });
-      fetchProducts();
+    if (window.confirm('Удалить товар?')) {
+      await apiDelete(`/products/${id}`);
+      loadProducts();
     }
   };
 
+  const startEdit = (p) => {
+    setEditing(p);
+    setForm({ name: p.name, price: p.price, stock: p.stock });
+  };
+
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <h2>Товары</h2><button onClick={logout}>Выйти</button>
-      </div>
-      <form onSubmit={handleSubmit} style={{ marginBottom: 20 }}>
-        <input placeholder="Название" value={name} onChange={e => setName(e.target.value)} required />
-        <input type="number" placeholder="Цена" value={price} onChange={e => setPrice(e.target.value)} required style={{ marginLeft: 10 }} />
-        <input type="number" placeholder="Остаток" value={stock} onChange={e => setStock(e.target.value)} required style={{ marginLeft: 10 }} />
-        <button type="submit" style={{ marginLeft: 10 }}>{editId ? 'Сохранить' : 'Добавить'}</button>
-        {editId && <button type="button" onClick={() => { setName(''); setPrice(''); setStock(''); setEditId(null); }}>Отмена</button>}
+    <div className="container mt-4">
+      <h2>Управление товарами</h2>
+      <form onSubmit={handleSubmit} className="row g-3 mb-4">
+        <div className="col">
+          <input type="text" className="form-control" placeholder="Название" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
+        </div>
+        <div className="col">
+          <input type="number" className="form-control" placeholder="Цена" value={form.price} onChange={e => setForm({...form, price: e.target.value})} required />
+        </div>
+        <div className="col">
+          <input type="number" className="form-control" placeholder="Кол-во" value={form.stock} onChange={e => setForm({...form, stock: e.target.value})} required />
+        </div>
+        <div className="col">
+          <button type="submit" className="btn btn-primary">{editing ? 'Обновить' : 'Добавить'}</button>
+          {editing && <button type="button" className="btn btn-secondary ms-2" onClick={() => { setEditing(null); setForm({ name: '', price: '', stock: '' }); }}>Отмена</button>}
+        </div>
       </form>
-      <table border={1} cellPadding={5} width="100%">
-        <thead><tr><th>ID</th><th>Название</th><th>Цена</th><th>Остаток</th><th></th></tr></thead>
+      <table className="table">
+        <thead>
+          <tr><th>ID</th><th>Название</th><th>Цена</th><th>Остаток</th><th>Действия</th></tr>
+        </thead>
         <tbody>
           {products.map(p => (
             <tr key={p.id}>
-              <td>{p.id}</td><td>{p.name}</td><td>{p.price}</td><td>{p.stock_quantity}</td>
+              <td>{p.id}</td>
+              <td>{p.name}</td>
+              <td>{p.price}</td>
+              <td>{p.stock}</td>
               <td>
-                <button onClick={() => handleEdit(p)}>Ред.</button>
-                <button onClick={() => handleDelete(p.id)} style={{ marginLeft: 5 }}>Уд.</button>
+                <button className="btn btn-sm btn-warning me-2" onClick={() => startEdit(p)}>Изменить</button>
+                <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Удалить</button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div style={{ marginTop: 20 }}><a href="/orders">К заказам</a></div>
     </div>
   );
 }

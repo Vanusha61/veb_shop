@@ -9,6 +9,10 @@ import product_client
 
 app = FastAPI(title="Order Service")
 
+# Инициализируем клиент (предполагается, что переменная окружения PRODUCT_SERVICE_URL задана)
+import os
+product_client = product_client.ProductClient(os.getenv("PRODUCT_SERVICE_URL", "http://product-service:8001"))
+
 
 class CartAdd(BaseModel):
     session_id: str
@@ -54,7 +58,7 @@ def get_or_create_cart(session_id: str, db: Session):
 @app.post("/cart/items")
 def add_to_cart(data: CartAdd, db: Session = Depends(get_db)):
     try:
-        product = product_client.check_product(data.product_id)
+        product = product_client.check_product(data.product_id)   # синхронный вызов
     except Exception:
         raise HTTPException(status_code=400, detail="Product not available")
 
@@ -85,7 +89,7 @@ def view_cart(session_id: str, db: Session = Depends(get_db)):
     total = 0
     for item in cart.items:
         try:
-            p = product_client.get_product(item.product_id)
+            p = product_client.check_product(item.product_id)   # синхронный вызов
             items.append({"product_id": item.product_id, "name": p["name"], "price": p["price"], "quantity": item.quantity})
             total += p["price"] * item.quantity
         except Exception:
@@ -125,7 +129,6 @@ def clear_cart(data: CartClear, db: Session = Depends(get_db)):
     return {"message": "Cart cleared"}
 
 
-# ===== ЗАКАЗЫ =====
 @app.post("/orders")
 def create_order(data: OrderCreate, db: Session = Depends(get_db)):
     cart = db.query(models.Cart).filter(models.Cart.session_id == data.session_id).first()
@@ -138,7 +141,11 @@ def create_order(data: OrderCreate, db: Session = Depends(get_db)):
     for item in cart.items:
         try:
             p = product_client.check_product(item.product_id)
-            items_data.append({"product_id": item.product_id, "quantity": item.quantity, "price": p["price"]})
+            items_data.append({
+                "product_id": item.product_id,
+                "quantity": item.quantity,
+                "price": p["price"]
+            })
             total += p["price"] * item.quantity
         except Exception:
             raise HTTPException(status_code=400, detail=f"Product {item.product_id} not available")
@@ -151,6 +158,15 @@ def create_order(data: OrderCreate, db: Session = Depends(get_db)):
     for d in items_data:
         db.add(models.OrderItem(order_id=order.id, **d))
 
+    # Списание товара
+    try:
+        for d in items_data:
+            product_client.update_stock(d["product_id"], -d["quantity"])
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Stock error: {str(e)}")
+
+    # Очищаем корзину
     db.query(models.CartItem).filter(models.CartItem.cart_id == cart.id).delete()
     db.commit()
 
@@ -158,9 +174,10 @@ def create_order(data: OrderCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/admin/orders")
-def get_all_orders(admin = Depends(get_current_admin), db: Session = Depends(get_db)):
+def get_all_orders(admin=Depends(get_current_admin), db: Session = Depends(get_db)):
     orders = db.query(models.Order).all()
     return [{"order_id": o.id, "status": o.status, "total": o.total_price, "created_at": str(o.created_at)} for o in orders]
+
 
 @app.get("/orders")
 def get_orders(session_id: str, db: Session = Depends(get_db)):
@@ -169,7 +186,7 @@ def get_orders(session_id: str, db: Session = Depends(get_db)):
 
 
 @app.put("/orders/{order_id}/status")
-def update_order_status(order_id: int, data: OrderStatus, admin = Depends(get_current_admin), db: Session = Depends(get_db)):
+def update_order_status(order_id: int, data: OrderStatus, admin=Depends(get_current_admin), db: Session = Depends(get_db)):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Not found")
